@@ -10,8 +10,8 @@ Scientific organisations often share specialised software with universities, lab
 
 ## Features
 
-- [ ] Catalogue of software packages with versions and checksums
-- [ ] Access requests from registered users
+- [x] Catalogue of software packages with versions and checksums
+- [x] Access requests from registered users
 - [ ] Admin review and approval workflow
 - [ ] Audit log for every action
 - [ ] REST API for packages and requests
@@ -70,9 +70,37 @@ python manage.py runserver
 - Docker
 - GitHub Actions for CI/CD
 
-### Environment variables
+### Environment Variables
 
 This project reads its settings from a `.env` file, so secrets never go into the code. Please use the `.env.example` file as a guide to creating your own `.env` file.
+
+## Data model
+
+| Model            | Purpose                                                        |
+| ---------------- | -------------------------------------------------------------- |
+| `Institution`    | The organisation that requests software, with its country code |
+| `CodePackage`    | A piece of software. Restricted packages need extra review     |
+| `PackageVersion` | One release of a package, with a SHA-256 checksum              |
+| `AccessRequest`  | A user asks for one version. An admin approves or rejects it   |
+| `AuditLog`       | A permanent, append-only record of every action                |
+
+### Design decisions
+
+- Foreign keys use `PROTECT`, so records with history cannot be deleted.
+- A database check constraint makes sure every reviewed request records who reviewed it and when.
+- Audit log entries cannot be changed or deleted through the app or the admin. In production, database permissions should also block UPDATE and DELETE on this table.
+- Admins approve or reject requests with admin actions. Each action updates the request and writes an audit entry in one database transaction.
+- Only pending requests can be reviewed, so every decision is final and traceable.
+- `transaction.atomic()`: the status change and the audit entry save together, or neither saves. You can never have an approval with no record of it.
+- `select_for_update()`: if two admins click Approve at the same moment, the database locks the rows, so one request cannot get reviewed twice.
+- The status field is read-only in the admin. In testing, a manual status change with no reviewer was blocked by the database check constraint, which confirmed the constraint works as a final safeguard.
+- Checksums: A checksum is a fingerprint for a file. You run the file through a function called SHA-256, and it gives you a code that is always 64 characters long, using only 0 to 9 and a to f. Change one letter in the file, and the whole fingerprint changes. So when someone downloads a package, they can make the fingerprint again and compare it. If the two match, the file is exactly the one you sent, with no damage and no tampering. To make a checksum, go to your Terminal:
+
+```js
+shasum -a 256 <filename>
+```
+
+Then make a change to your file and save. Run the command above again, and you should see a new code.
 
 ## Developer
 
