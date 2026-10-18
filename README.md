@@ -102,6 +102,20 @@ shasum -a 256 <filename>
 
 Then make a change to your file and save. Run the command above again, and you should see a new code.
 
+## Running tests
+
+```bash
+python manage.py test
+```
+
+The tests check that:
+
+- A package cannot have two versions with the same number.
+- The database blocks an approved request with no reviewer.
+- Audit log entries cannot be changed or deleted.
+- Approve and reject actions set the reviewer and write one audit entry.
+- A request cannot be reviewed twice.
+
 ## Developer
 
 Caroline Crandell - cecrandell
