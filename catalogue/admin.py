@@ -23,6 +23,25 @@ class CodePackageAdmin(admin.ModelAdmin):
     search_fields = ["name"]
     inlines = [PackageVersionInline]
 
+    def save_model(self, request, obj, form, change):
+        is_new = obj.pk is None
+        super().save_model(request, obj, form, change)
+        if is_new:
+            AuditLog.objects.create(
+                actor=request.user,
+                action=AuditLog.Action.PACKAGE_ADDED,
+                details={"package": obj.name},
+            )
+
+    def save_formset(self, request, form, formset, change):
+        formset.save()
+        for version in formset.new_objects:
+            AuditLog.objects.create(
+                actor=request.user,
+                action=AuditLog.Action.VERSION_ADDED,
+                package_version=version,
+            )
+
 
 @admin.register(AccessRequest)
 class AccessRequestAdmin(admin.ModelAdmin):

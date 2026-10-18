@@ -12,11 +12,12 @@ Scientific organisations often share specialised software with universities, lab
 
 - [x] Catalogue of software packages with versions and checksums
 - [x] Access requests from registered users
-- [ ] Admin review and approval workflow
-- [ ] Audit log for every action
+- [x] Admin review and approval workflow
+- [x] Audit log for packages, versions, requests, and reviews
+- [ ] Audit log for downloads
+- [x] Automated tests
 - [ ] REST API for packages and requests
-- [ ] Automated tests
-- [ ] Docker setup
+- [ ] Docker setup with PostgreSQL
 - [ ] CI/CD pipeline
 
 ## Step-by-Step on how to set up the application

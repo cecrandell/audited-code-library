@@ -82,6 +82,28 @@ class AuditLogTests(CatalogueTestCase):
         with self.assertRaises(ValueError):
             entry.delete()
 
+    def test_adding_package_in_admin_writes_audit_entries(self):
+        self.client.force_login(self.admin)
+        self.client.post(
+            reverse("admin:catalogue_codepackage_add"),
+            {
+                "name": "NewCode",
+                "description": "",
+                "versions-TOTAL_FORMS": "1",
+                "versions-INITIAL_FORMS": "0",
+                "versions-0-version": "2.0",
+                "versions-0-checksum_sha256": "c" * 64,
+                "versions-0-released_at": "2026-03-01",
+                "versions-0-notes": "",
+            },
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.PACKAGE_ADDED).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(action=AuditLog.Action.VERSION_ADDED).exists()
+        )
+
 
 class ReviewActionTests(CatalogueTestCase):
     def setUp(self):
