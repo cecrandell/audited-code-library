@@ -37,7 +37,7 @@ class AccessRequestViewSet(
                 package_version=access_request.package_version,
             )
 
-        @action(detail=True, methods=["post"], serializer_class=serializers.Serializer)
+    @action(detail=True, methods=["post"], serializer_class=serializers.Serializer)
     def download(self, request, pk=None):
         access_request = self.get_object()
         if access_request.status != AccessRequest.Status.APPROVED:
