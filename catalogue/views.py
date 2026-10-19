@@ -1,5 +1,5 @@
 from django.db import transaction
-from rest_framework import mixins, viewsets
+from rest_framework import mixins, serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -37,7 +37,7 @@ class AccessRequestViewSet(
                 package_version=access_request.package_version,
             )
 
-    @action(detail=True, methods=["post"])
+        @action(detail=True, methods=["post"], serializer_class=serializers.Serializer)
     def download(self, request, pk=None):
         access_request = self.get_object()
         if access_request.status != AccessRequest.Status.APPROVED:
