@@ -1,5 +1,7 @@
 # Audited Code Library
 
+![CI](https://github.com/cecrandell/audited-code-library/actions/workflows/ci.yml/badge.svg)
+
 ## What does this application do and why?
 
 A demo of a secure, auditable workflow for distributing scientific software.
@@ -18,7 +20,8 @@ Scientific organisations often share specialised software with universities, lab
 - [x] Automated tests
 - [ ] REST API for packages and requests
 - [x] Docker setup with PostgreSQL
-- [ ] CI/CD pipeline
+- [x] CI pipeline (GitHub Actions)
+- [ ] CD: publish Docker image
 
 ## Step-by-Step on how to set up the application
 
@@ -144,6 +147,16 @@ docker compose exec web python manage.py test
 ```
 
 Without Docker, the app uses SQLite for quick local development.
+
+## Continuous integration
+
+GitHub Actions runs on every push and pull request:
+
+1. Lints the code with Ruff.
+2. Runs Django's system check.
+3. Fails if a model change has no migration.
+4. Runs the test suite against PostgreSQL 17.
+5. Builds the Docker image.
 
 ## Developer
 
