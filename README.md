@@ -17,7 +17,7 @@ Scientific organisations often share specialised software with universities, lab
 - [ ] Audit log for downloads
 - [x] Automated tests
 - [ ] REST API for packages and requests
-- [ ] Docker setup with PostgreSQL
+- [x] Docker setup with PostgreSQL
 - [ ] CI/CD pipeline
 
 ## Step-by-Step on how to set up the application
@@ -105,7 +105,7 @@ Then make a change to your file and save. Run the command above again, and you s
 
 ## Running tests
 
-```bash
+```js
 python manage.py test
 ```
 
@@ -116,6 +116,34 @@ The tests check that:
 - Audit log entries cannot be changed or deleted.
 - Approve and reject actions set the reviewer and write one audit entry.
 - A request cannot be reviewed twice.
+
+## Run with Docker
+
+This runs the app with PostgreSQL in containers.
+
+1. Install Docker Desktop.
+2. Copy `.env.example` to `.env` and fill in the values.
+3. Start the app:
+
+```js
+   docker compose up --build
+```
+
+4. In a second terminal, create an admin user:
+
+```js
+   docker compose exec web python manage.py createsuperuser
+```
+
+5. Open http://localhost:8000/admin.
+
+Run the tests against PostgreSQL:
+
+```js
+docker compose exec web python manage.py test
+```
+
+Without Docker, the app uses SQLite for quick local development.
 
 ## Developer
 
