@@ -5,6 +5,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from .models import AccessRequest, AuditLog, CodePackage, Institution, PackageVersion
 
@@ -154,4 +155,77 @@ class ReviewActionTests(CatalogueTestCase):
         self.assertEqual(access_request.status, AccessRequest.Status.APPROVED)
         self.assertEqual(
             AuditLog.objects.filter(access_request=access_request).count(), 1
+        )
+
+
+class ApiTests(CatalogueTestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def approve(self, access_request):
+        access_request.status = AccessRequest.Status.APPROVED
+        access_request.reviewed_by = self.admin
+        access_request.reviewed_at = timezone.now()
+        access_request.save()
+
+    def test_api_requires_login(self):
+        response = APIClient().get("/api/packages/")
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_list_packages(self):
+        response = self.client.get("/api/packages/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()[0]["name"], "DemoTransport")
+
+    def test_create_request_sets_requester_and_writes_audit_entry(self):
+        response = self.client.post(
+            "/api/requests/",
+            {
+                "institution": self.institution.pk,
+                "package_version": self.version.pk,
+                "purpose": "Research",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        access_request = AccessRequest.objects.get(pk=response.json()["id"])
+        self.assertEqual(access_request.requester, self.user)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                access_request=access_request,
+                action=AuditLog.Action.REQUEST_CREATED,
+            ).exists()
+        )
+
+    def test_user_cannot_see_other_users_requests(self):
+        other = User.objects.create_user("other", "other@example.com", "test-password")
+        other_request = AccessRequest.objects.create(
+            requester=other,
+            institution=self.institution,
+            package_version=self.version,
+            purpose="Private",
+        )
+        response = self.client.get(f"/api/requests/{other_request.pk}/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_cannot_download_pending_request(self):
+        access_request = self.make_request()
+        response = self.client.post(f"/api/requests/{access_request.pk}/download/")
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
+            AuditLog.objects.filter(action=AuditLog.Action.DOWNLOADED).exists()
+        )
+
+    def test_download_approved_request_writes_audit_entry(self):
+        access_request = self.make_request()
+        self.approve(access_request)
+        response = self.client.post(f"/api/requests/{access_request.pk}/download/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["checksum_sha256"], "a" * 64)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                access_request=access_request,
+                action=AuditLog.Action.DOWNLOADED,
+            ).exists()
         )

@@ -16,12 +16,13 @@ Scientific organisations often share specialised software with universities, lab
 - [x] Access requests from registered users
 - [x] Admin review and approval workflow
 - [x] Audit log for packages, versions, requests, and reviews
-- [ ] Audit log for downloads
+- [x] Audit log for downloads
 - [x] Automated tests
-- [ ] REST API for packages and requests
+- [x] REST API for packages and requests
 - [x] Docker setup with PostgreSQL
 - [x] CI pipeline (GitHub Actions)
 - [ ] CD: publish Docker image
+- [ ] File storage for package files
 
 ## Step-by-Step on how to set up the application
 
@@ -157,6 +158,20 @@ GitHub Actions runs on every push and pull request:
 3. Fails if a model change has no migration.
 4. Runs the test suite against PostgreSQL 17.
 5. Builds the Docker image.
+
+## REST API
+
+All endpoints need a login.
+
+| Method | Endpoint                       | Description                           |
+| ------ | ------------------------------ | ------------------------------------- |
+| GET    | `/api/packages/`               | List packages and versions            |
+| GET    | `/api/requests/`               | List your own access requests         |
+| POST   | `/api/requests/`               | Create an access request              |
+| GET    | `/api/requests/<id>/`          | View one of your requests             |
+| POST   | `/api/requests/<id>/download/` | Download an approved package (logged) |
+
+Users can only see their own requests. Requests from other users return 404, so the API does not reveal that they exist. Download uses POST because it changes data: it writes an audit entry.
 
 ## Developer
 
