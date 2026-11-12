@@ -30,6 +30,18 @@
 - Constraint tests wrap the failing save in `transaction.atomic()`. The savepoint keeps the test transaction usable after PostgreSQL raises the error.
 - The API returns 404, not 403, for another user's request, so it does not reveal that the request exists. A test protects this behaviour.
 
+## `catalogue/serializers.py`
+
+**Summary:** The serializers translate between the database and the JSON API, and they decide what users can see and change. Package data is read-only: users see each package with its versions and checksums, but cannot change them. For access requests, a user sends only three things: the institution, the package version, and the purpose. The server sets everything else, including who asked, the status, and the review time. So a user cannot approve their own request, or make a request in someone else's name.
+
+**Key decisions:**
+
+- Every serializer lists its fields explicitly. This is an allowlist: a new model field never appears in the API by accident.
+- `requester` is read-only and set by the server from the logged-in user.
+- `status`, `reviewed_at`, and `created_at` are read-only, so the outcome of a request can only change through the admin review.
+- `reviewed_by` is not exposed. Users see the decision and its time, but not which staff member made it.
+- Versions are nested inside each package as read-only data, so one API call shows a package with all its releases.
+
 ## Known Limitations
 
 - **`catalogue/models.py`: bulk changes can bypass the audit log protection.** Django bulk operations, such as `AuditLog.objects.all().delete()` or `.update()`, skip the model methods. Raw SQL skips them too. The model methods stop accidental changes in the application.
@@ -40,6 +52,8 @@
 - **`catalogue/tests.py`: some rules have no test yet.** No test checks that the audit log admin is read-only, that non-staff users cannot use the admin actions, or that a user cannot download another user's approved request.
 - **`catalogue/tests.py`: concurrent reviews are not tested.** The row locking in `_review` only matters when two reviewers act at the same moment, and a normal unit test runs one request at a time.
 - **`catalogue/tests.py`: local test runs use SQLite.** Row locking and some constraint behaviour differ from PostgreSQL. CI uses PostgreSQL, so these differences only appear after a push.
+- **`catalogue/serializers.py`: the institution is self-declared.** A user can choose any institution, and nothing checks that they work there. For export-controlled software, this is a real gap.
+- **`catalogue/serializers.py`: every logged-in user sees every package.** This includes restricted packages and their checksums. Access is controlled at download, but for some export-controlled codes, even the list of what exists may be sensitive.
 
 ## Next Steps
 
@@ -51,3 +65,5 @@
 - **`catalogue/tests.py`: some rules have no test yet.** Add tests for the read-only audit log admin, non-staff access to admin actions, and downloads of another user's approved request.
 - **`catalogue/tests.py`: concurrent reviews are not tested.** Add a `TransactionTestCase` that runs two reviews in parallel threads against PostgreSQL.
 - **`catalogue/tests.py`: local test runs use SQLite.** Run the tests locally against PostgreSQL with `compose.yaml`, so local results match CI.
+- **`catalogue/serializers.py`: the institution is self-declared.** Link each user to an institution (for example, a profile model), and have the server set the institution, as it does for the requester.
+- **`catalogue/serializers.py`: every logged-in user sees every package.** Confirm the policy. If needed, filter restricted packages in the view, or hide their details from users without approved access.
