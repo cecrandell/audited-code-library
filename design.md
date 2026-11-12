@@ -63,6 +63,15 @@
 - A router generates the API routes, so a route cannot exist for an action the ViewSet does not support.
 - Both ViewSets have an explicit `basename`. It is required for the access request ViewSet, which uses `get_queryset()`, and it keeps the route names consistent.
 
+## `config/settings.py`
+
+**Summary:** The settings read every environment-specific value from environment variables: the secret key, debug mode, allowed hosts, and database credentials. On a laptop, these come from a `.env` file that is not committed. A single variable, `USE_POSTGRES`, switches between PostgreSQL (Docker and continuous integration) and SQLite (local development). The API requires login by default, so every endpoint is protected unless a view sets its own rule.
+
+**Key decisions:**
+
+- Secure by default: the app does not start without a secret key, and debug mode is off unless explicitly turned on.
+- All times are stored in UTC, so audit entries from different time zones stay in the correct order.
+
 ## Known Limitations
 
 - **`catalogue/models.py`: bulk changes can bypass the audit log protection.** Django bulk operations, such as `AuditLog.objects.all().delete()` or `.update()`, skip the model methods. Raw SQL skips them too. The model methods stop accidental changes in the application.
@@ -81,6 +90,7 @@
 - **`catalogue/views.py`: lists are not paginated.** The package and request lists return every row at once.
 - **`catalogue/tests.py`: tests hard-code API paths.** The API tests use paths like `/api/packages/`, so a change to the URL structure breaks them.
 - **`config/urls.py`: the API has no version in its path.** A future change to the response format would affect every client at once.
+- **`config/settings.py`: production security settings are not configured.** HTTPS redirects, secure cookies, and HTTP Strict Transport Security are not set, and there is no folder for collected static files, so the admin's styling would not load in production.
 
 ## Next Steps
 
@@ -96,3 +106,4 @@
 - **`catalogue/serializers.py`: every logged-in user sees every package.** Confirm the policy. If needed, filter restricted packages in the view, or hide their details from users without approved access.
 - **`catalogue/tests.py`: tests hard-code API paths.** Build paths with `reverse()` and the router's route names, for example `reverse("package-list")`.
 - **`config/urls.py`: the API has no version in its path.** Serve the API under `/api/v1/`, so a future version can run alongside it.
+- **`config/settings.py`: production security settings are not configured.** Run `python manage.py check --deploy`, which lists every missing production setting, and add a production check to continuous integration. Set `STATIC_ROOT` and serve static files, for example with WhiteNoise.
