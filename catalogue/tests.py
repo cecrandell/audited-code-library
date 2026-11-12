@@ -5,9 +5,8 @@ possible, so they check what staff and users actually experience. CI runs
 them against PostgreSQL on every push.
 """
 
-from unittest import skip
-
 from datetime import date
+from unittest import skip
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
