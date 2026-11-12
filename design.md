@@ -54,6 +54,15 @@
 - `prefetch_related("versions")` loads all versions in one query, avoiding one query per package.
 - `perform_create` uses an explicit transaction, because Django REST Framework does not wrap views in one by default.
 
+## `config/urls.py` and `catalogue/urls.py`
+
+**Summary:** The two URL files work as a pair. `config/urls.py` is the entry point for the whole project: it sends `/admin/` to the Django admin, `/api/` to the catalogue, and `/api-auth/` to the login pages for the browsable API. `catalogue/urls.py` uses a router, which creates one route for each action a ViewSet supports. So the routes always match the actions: the read-only package ViewSet gets list and detail routes, and the access request ViewSet also gets create and download routes.
+
+**Key decisions:**
+
+- A router generates the API routes, so a route cannot exist for an action the ViewSet does not support.
+- Both ViewSets have an explicit `basename`. It is required for the access request ViewSet, which uses `get_queryset()`, and it keeps the route names consistent.
+
 ## Known Limitations
 
 - **`catalogue/models.py`: bulk changes can bypass the audit log protection.** Django bulk operations, such as `AuditLog.objects.all().delete()` or `.update()`, skip the model methods. Raw SQL skips them too. The model methods stop accidental changes in the application.
@@ -70,6 +79,8 @@
 - **`catalogue/views.py`: approvals never expire.** An approved user can download as many times as they like, forever. Each download is logged, but nothing limits it.
 - **`catalogue/views.py`: the request list runs one extra query per row.** The serializer shows the requester's name, but `requester` is not in `select_related`.
 - **`catalogue/views.py`: lists are not paginated.** The package and request lists return every row at once.
+- **`catalogue/tests.py`: tests hard-code API paths.** The API tests use paths like `/api/packages/`, so a change to the URL structure breaks them.
+- **`config/urls.py`: the API has no version in its path.** A future change to the response format would affect every client at once.
 
 ## Next Steps
 
@@ -83,3 +94,5 @@
 - **`catalogue/tests.py`: local test runs use SQLite.** Run the tests locally against PostgreSQL with `compose.yaml`, so local results match CI.
 - **`catalogue/serializers.py`: the institution is self-declared.** Link each user to an institution (for example, a profile model), and have the server set the institution, as it does for the requester.
 - **`catalogue/serializers.py`: every logged-in user sees every package.** Confirm the policy. If needed, filter restricted packages in the view, or hide their details from users without approved access.
+- **`catalogue/tests.py`: tests hard-code API paths.** Build paths with `reverse()` and the router's route names, for example `reverse("package-list")`.
+- **`config/urls.py`: the API has no version in its path.** Serve the API under `/api/v1/`, so a future version can run alongside it.
