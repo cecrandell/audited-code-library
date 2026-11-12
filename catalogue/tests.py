@@ -177,6 +177,95 @@ class ReviewActionTests(CatalogueTestCase):
         )
 
 
+@skip("is_restricted is not enforced yet. See design.md, Next Steps.")
+class RestrictedPackageTests(CatalogueTestCase):
+    """Only reviewers with a dedicated permission can approve restricted packages."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        restricted = CodePackage.objects.create(
+            name="RestrictedCode", is_restricted=True
+        )
+        cls.restricted_version = PackageVersion.objects.create(
+            package=restricted,
+            version="1.0",
+            checksum_sha256="d" * 64,
+            released_at=date(2026, 1, 1),
+        )
+
+    def make_reviewer(self, *extra_codenames):
+        # A staff member who can use the access request admin, but who is
+        # not a superuser. Superusers have every permission, so they cannot
+        # test a permission rule.
+        reviewer = User.objects.create_user(
+            "reviewer", "reviewer@example.com", "test-password", is_staff=True
+        )
+        permissions = Permission.objects.filter(
+            content_type__app_label="catalogue",
+            codename__in=[
+                "view_accessrequest",
+                "change_accessrequest",
+                *extra_codenames,
+            ],
+        )
+        reviewer.user_permissions.add(*permissions)
+        return reviewer
+
+    def make_restricted_request(self):
+        return AccessRequest.objects.create(
+            requester=self.user,
+            institution=self.institution,
+            package_version=self.restricted_version,
+            purpose="Testing",
+        )
+
+    def approve_as(self, reviewer, *access_requests):
+        self.client.force_login(reviewer)
+        self.client.post(
+            reverse("admin:catalogue_accessrequest_changelist"),
+            {
+                "action": "approve_requests",
+                "index": 0,
+                "_selected_action": [r.pk for r in access_requests],
+            },
+        )
+
+    def test_reviewer_without_permission_cannot_approve_restricted_package(self):
+        restricted_request = self.make_restricted_request()
+        # Control: an ordinary request in the same action. If it is
+        # approved, the reviewer could use the action, so the restricted
+        # request was blocked by the rule and not by missing access.
+        normal_request = self.make_request()
+
+        self.approve_as(self.make_reviewer(), restricted_request, normal_request)
+
+        restricted_request.refresh_from_db()
+        normal_request.refresh_from_db()
+        self.assertEqual(restricted_request.status, AccessRequest.Status.PENDING)
+        self.assertEqual(normal_request.status, AccessRequest.Status.APPROVED)
+        self.assertFalse(
+            AuditLog.objects.filter(
+                access_request=restricted_request,
+                action=AuditLog.Action.REQUEST_APPROVED,
+            ).exists()
+        )
+
+    def test_reviewer_with_permission_can_approve_restricted_package(self):
+        restricted_request = self.make_restricted_request()
+
+        self.approve_as(self.make_reviewer("approve_restricted"), restricted_request)
+
+        restricted_request.refresh_from_db()
+        self.assertEqual(restricted_request.status, AccessRequest.Status.APPROVED)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                access_request=restricted_request,
+                action=AuditLog.Action.REQUEST_APPROVED,
+            ).exists()
+        )
+
+
 class ApiTests(CatalogueTestCase):
     """Tests the REST API as an ordinary user."""
 

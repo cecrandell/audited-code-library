@@ -47,6 +47,7 @@
 - **`catalogue/models.py`: `is_restricted` is not enforced yet.** Only reviewers with a dedicated permission can approve restricted packages.
 - **`catalogue/admin.py`: edits are not logged.** Log `formset.changed_objects` and `formset.deleted_objects`, make the checksum read-only after creation, and set `can_delete = False` on the version inline.
 - **`catalogue/admin.py`: request details stay editable after a decision.** Make every field read-only once the request exists, with `get_readonly_fields`.
+- **`catalogue/tests.py`: `is_restricted` has tests, but they are skipped.** `RestrictedPackageTests` describes the rule: a reviewer without the `approve_restricted` permission cannot approve a restricted package, and a reviewer with it can. When the rule is added to `AccessRequestAdmin._review`, remove the `@skip` decorator.
 - **`catalogue/tests.py`: some rules have no test yet.** Add tests for the read-only audit log admin, non-staff access to admin actions, and downloads of another user's approved request.
 - **`catalogue/tests.py`: concurrent reviews are not tested.** Add a `TransactionTestCase` that runs two reviews in parallel threads against PostgreSQL.
 - **`catalogue/tests.py`: local test runs use SQLite.** Run the tests locally against PostgreSQL with `compose.yaml`, so local results match CI.
