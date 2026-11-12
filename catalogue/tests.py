@@ -1,6 +1,16 @@
+"""Tests for the catalogue app.
+
+The tests use the real interfaces (admin pages and the REST API) where
+possible, so they check what staff and users actually experience. CI runs
+them against PostgreSQL on every push.
+"""
+
+from unittest import skip
+
 from datetime import date
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
@@ -13,6 +23,8 @@ User = get_user_model()
 
 
 class CatalogueTestCase(TestCase):
+    """Shared starting data: an admin, a researcher, and one package version."""
+
     @classmethod
     def setUpTestData(cls):
         cls.admin = User.objects.create_superuser(
@@ -42,6 +54,10 @@ class CatalogueTestCase(TestCase):
 
 
 class ConstraintTests(CatalogueTestCase):
+    """The database enforces these rules, not only the application."""
+
+    # transaction.atomic() creates a savepoint. Without it, PostgreSQL
+    # marks the test transaction as broken after the IntegrityError.
     def test_package_cannot_have_duplicate_versions(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
             PackageVersion.objects.create(
@@ -90,6 +106,8 @@ class AuditLogTests(CatalogueTestCase):
             {
                 "name": "NewCode",
                 "description": "",
+                # Management form for the version inline
+                # (prefix from related_name="versions").
                 "versions-TOTAL_FORMS": "1",
                 "versions-INITIAL_FORMS": "0",
                 "versions-0-version": "2.0",
@@ -107,6 +125,8 @@ class AuditLogTests(CatalogueTestCase):
 
 
 class ReviewActionTests(CatalogueTestCase):
+    """Runs the real approve and reject actions from the admin list page."""
+
     def setUp(self):
         self.client.force_login(self.admin)
         self.url = reverse("admin:catalogue_accessrequest_changelist")
@@ -120,7 +140,6 @@ class ReviewActionTests(CatalogueTestCase):
     def test_approve_sets_reviewer_and_writes_audit_entry(self):
         access_request = self.make_request()
         self.run_action("approve_requests", access_request)
-
         access_request.refresh_from_db()
         self.assertEqual(access_request.status, AccessRequest.Status.APPROVED)
         self.assertEqual(access_request.reviewed_by, self.admin)
@@ -136,7 +155,6 @@ class ReviewActionTests(CatalogueTestCase):
     def test_reject_writes_audit_entry(self):
         access_request = self.make_request()
         self.run_action("reject_requests", access_request)
-
         access_request.refresh_from_db()
         self.assertEqual(access_request.status, AccessRequest.Status.REJECTED)
         self.assertTrue(
@@ -150,15 +168,18 @@ class ReviewActionTests(CatalogueTestCase):
         access_request = self.make_request()
         self.run_action("approve_requests", access_request)
         self.run_action("reject_requests", access_request)
-
         access_request.refresh_from_db()
         self.assertEqual(access_request.status, AccessRequest.Status.APPROVED)
+        # make_request() bypasses the admin, so the only entry should be
+        # the approval. A second entry would mean the reject also ran.
         self.assertEqual(
             AuditLog.objects.filter(access_request=access_request).count(), 1
         )
 
 
 class ApiTests(CatalogueTestCase):
+    """Tests the REST API as an ordinary user."""
+
     def setUp(self):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
@@ -171,6 +192,7 @@ class ApiTests(CatalogueTestCase):
 
     def test_api_requires_login(self):
         response = APIClient().get("/api/packages/")
+        # 401 or 403, depending on the authentication method
         self.assertIn(response.status_code, [401, 403])
 
     def test_list_packages(self):
@@ -179,6 +201,8 @@ class ApiTests(CatalogueTestCase):
         self.assertEqual(response.json()[0]["name"], "DemoTransport")
 
     def test_create_request_sets_requester_and_writes_audit_entry(self):
+        # No requester in the body: the server sets it from the logged-in
+        # user, so nobody can request on behalf of someone else.
         response = self.client.post(
             "/api/requests/",
             {
@@ -207,6 +231,7 @@ class ApiTests(CatalogueTestCase):
             purpose="Private",
         )
         response = self.client.get(f"/api/requests/{other_request.pk}/")
+        # 404, not 403: the API does not reveal that the request exists.
         self.assertEqual(response.status_code, 404)
 
     def test_cannot_download_pending_request(self):

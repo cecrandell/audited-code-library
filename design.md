@@ -19,6 +19,17 @@
 - One helper, `_review`, holds the logic for both approve and reject, so the two paths cannot drift apart.
 - Blocking delete permission on `AuditLog` also removes Django's bulk "Delete selected" action, which would bypass `AuditLog.delete()`.
 
+## `catalogue/tests.py`
+
+**Summary:** The tests check the rules that make the library trustworthy. There are 15 tests in four groups. The constraint tests prove that the database itself rejects a duplicate version and an approval with no reviewer. The audit log tests prove that an entry cannot be changed or deleted, and that adding a package in the admin writes audit entries. The review action tests run the real admin approve and reject actions, and prove that a request cannot be reviewed twice. The API tests prove that login is required, users see only their own requests, a pending request cannot be downloaded, and every successful download is logged. CI runs all tests against PostgreSQL on every push.
+
+**Key decisions:**
+
+- Tests use the real interfaces where possible: the admin pages through Django's test client, and the API through `APIClient`. They check what staff and users actually experience, not only the model methods.
+- Tests check refusals as well as successes. For example, a pending download must return 403 and must also write no audit entry.
+- Constraint tests wrap the failing save in `transaction.atomic()`. The savepoint keeps the test transaction usable after PostgreSQL raises the error.
+- The API returns 404, not 403, for another user's request, so it does not reveal that the request exists. A test protects this behaviour.
+
 ## Known Limitations
 
 - **`catalogue/models.py`: bulk changes can bypass the audit log protection.** Django bulk operations, such as `AuditLog.objects.all().delete()` or `.update()`, skip the model methods. Raw SQL skips them too. The model methods stop accidental changes in the application.
@@ -26,6 +37,9 @@
 - **`catalogue/admin.py`: edits are not logged.** The admin logs new packages and new versions, but not edits or deletions. For example, a change to a version's checksum creates no audit entry.
 - **`catalogue/admin.py`: request details stay editable after a decision.** Staff can still change the requester, institution, version, or purpose of an approved request.
 - **`catalogue/admin.py`: row locking needs PostgreSQL.** SQLite ignores `select_for_update()`, so the lock only works in production.
+- **`catalogue/tests.py`: some rules have no test yet.** No test checks that the audit log admin is read-only, that non-staff users cannot use the admin actions, or that a user cannot download another user's approved request.
+- **`catalogue/tests.py`: concurrent reviews are not tested.** The row locking in `_review` only matters when two reviewers act at the same moment, and a normal unit test runs one request at a time.
+- **`catalogue/tests.py`: local test runs use SQLite.** Row locking and some constraint behaviour differ from PostgreSQL. CI uses PostgreSQL, so these differences only appear after a push.
 
 ## Next Steps
 
@@ -33,3 +47,6 @@
 - **`catalogue/models.py`: `is_restricted` is not enforced yet.** Only reviewers with a dedicated permission can approve restricted packages.
 - **`catalogue/admin.py`: edits are not logged.** Log `formset.changed_objects` and `formset.deleted_objects`, make the checksum read-only after creation, and set `can_delete = False` on the version inline.
 - **`catalogue/admin.py`: request details stay editable after a decision.** Make every field read-only once the request exists, with `get_readonly_fields`.
+- **`catalogue/tests.py`: some rules have no test yet.** Add tests for the read-only audit log admin, non-staff access to admin actions, and downloads of another user's approved request.
+- **`catalogue/tests.py`: concurrent reviews are not tested.** Add a `TransactionTestCase` that runs two reviews in parallel threads against PostgreSQL.
+- **`catalogue/tests.py`: local test runs use SQLite.** Run the tests locally against PostgreSQL with `compose.yaml`, so local results match CI.
