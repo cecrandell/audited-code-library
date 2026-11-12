@@ -1,3 +1,10 @@
+"""Admin site configuration for the catalogue app.
+
+Staff use the admin to add packages and versions, and to review access
+requests. Each of these actions writes an AuditLog entry. The audit log
+itself is read-only in the admin.
+"""
+
 from django.contrib import admin, messages
 from django.db import transaction
 from django.utils import timezone
@@ -24,6 +31,7 @@ class CodePackageAdmin(admin.ModelAdmin):
     inlines = [PackageVersionInline]
 
     def save_model(self, request, obj, form, change):
+        # Check before saving: after the save, every object has a pk.
         is_new = obj.pk is None
         super().save_model(request, obj, form, change)
         if is_new:
@@ -53,6 +61,7 @@ class AccessRequestAdmin(admin.ModelAdmin):
         "created_at",
     ]
     list_filter = ["status", "institution__country"]
+    # Status changes only through the approve and reject actions.
     readonly_fields = ["status", "reviewed_by", "reviewed_at", "created_at"]
     actions = ["approve_requests", "reject_requests"]
 
@@ -70,6 +79,12 @@ class AccessRequestAdmin(admin.ModelAdmin):
                 )
 
     def _review(self, request, queryset, new_status, audit_action):
+        """Apply one decision to the selected pending requests.
+
+        Each decision and its audit entry are saved in one transaction.
+        Rows are locked, so two reviewers cannot decide the same request
+        at the same time. Requests that are no longer pending are skipped.
+        """
         total = queryset.count()
         reviewed = 0
         with transaction.atomic():
@@ -125,6 +140,8 @@ class AuditLogAdmin(admin.ModelAdmin):
     list_filter = ["action"]
 
     # The audit log is read-only for everyone, including superusers.
+    # Blocking delete also removes the bulk "Delete selected" action,
+    # which would bypass AuditLog.delete().
     def has_add_permission(self, request):
         return False
 
