@@ -42,6 +42,18 @@
 - `reviewed_by` is not exposed. Users see the decision and its time, but not which staff member made it.
 - Versions are nested inside each package as read-only data, so one API call shows a package with all its releases.
 
+## `catalogue/views.py`
+
+**Summary:** The views are the API endpoints. Logged-in users can read the package catalogue, create an access request, see their own requests, and download a package once its request is approved. Users only ever see their own requests: every action starts from a queryset filtered by the logged-in user, so another user's request returns 404. Creating a request and writing its audit entry happen in one transaction. A download is refused with 403 unless the request is approved, and every successful download is logged with the checksum returned, so the user can verify the file.
+
+**Key decisions:**
+
+- The request endpoint is built only from the create, list, and retrieve mixins. Without update or destroy mixins, users cannot edit or delete a request.
+- One filtered `get_queryset` protects every action, including download, so the privacy rule lives in one place.
+- Download uses POST, not GET, because it writes an audit entry, and GET requests must not change state.
+- `prefetch_related("versions")` loads all versions in one query, avoiding one query per package.
+- `perform_create` uses an explicit transaction, because Django REST Framework does not wrap views in one by default.
+
 ## Known Limitations
 
 - **`catalogue/models.py`: bulk changes can bypass the audit log protection.** Django bulk operations, such as `AuditLog.objects.all().delete()` or `.update()`, skip the model methods. Raw SQL skips them too. The model methods stop accidental changes in the application.
@@ -54,6 +66,10 @@
 - **`catalogue/tests.py`: local test runs use SQLite.** Row locking and some constraint behaviour differ from PostgreSQL. CI uses PostgreSQL, so these differences only appear after a push.
 - **`catalogue/serializers.py`: the institution is self-declared.** A user can choose any institution, and nothing checks that they work there. For export-controlled software, this is a real gap.
 - **`catalogue/serializers.py`: every logged-in user sees every package.** This includes restricted packages and their checksums. Access is controlled at download, but for some export-controlled codes, even the list of what exists may be sensitive.
+- **`catalogue/views.py`: download returns metadata, not a file.** The endpoint logs the download and returns the checksum, but no file is stored or delivered yet.
+- **`catalogue/views.py`: approvals never expire.** An approved user can download as many times as they like, forever. Each download is logged, but nothing limits it.
+- **`catalogue/views.py`: the request list runs one extra query per row.** The serializer shows the requester's name, but `requester` is not in `select_related`.
+- **`catalogue/views.py`: lists are not paginated.** The package and request lists return every row at once.
 
 ## Next Steps
 
