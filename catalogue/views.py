@@ -35,7 +35,7 @@ class AccessRequestViewSet(
         # download, starts from this queryset, so other users' requests
         # return 404.
         return AccessRequest.objects.filter(requester=self.request.user).select_related(
-            "package_version__package", "institution"
+            "requester", "package_version__package", "institution"
         )
 
     def perform_create(self, serializer):

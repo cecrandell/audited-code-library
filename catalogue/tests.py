@@ -176,7 +176,7 @@ class ReviewActionTests(CatalogueTestCase):
         )
 
 
-@skip("is_restricted is not enforced yet. See design.md, Next Steps.")
+@skip("is_restricted is not enforced yet. See README, Known limitations.")
 class RestrictedPackageTests(CatalogueTestCase):
     """Only reviewers with a dedicated permission can approve restricted packages."""
 
@@ -278,21 +278,24 @@ class ApiTests(CatalogueTestCase):
         access_request.reviewed_at = timezone.now()
         access_request.save()
 
+    def download_url(self, access_request):
+        return reverse("request-download", args=[access_request.pk])
+
     def test_api_requires_login(self):
-        response = APIClient().get("/api/packages/")
+        response = APIClient().get(reverse("package-list"))
         # 401 or 403, depending on the authentication method
         self.assertIn(response.status_code, [401, 403])
 
     def test_list_packages(self):
-        response = self.client.get("/api/packages/")
+        response = self.client.get(reverse("package-list"))
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()[0]["name"], "DemoTransport")
+        self.assertEqual(response.json()["results"][0]["name"], "DemoTransport")
 
     def test_create_request_sets_requester_and_writes_audit_entry(self):
         # No requester in the body: the server sets it from the logged-in
         # user, so nobody can request on behalf of someone else.
         response = self.client.post(
-            "/api/requests/",
+            reverse("request-list"),
             {
                 "institution": self.institution.pk,
                 "package_version": self.version.pk,
@@ -318,13 +321,13 @@ class ApiTests(CatalogueTestCase):
             package_version=self.version,
             purpose="Private",
         )
-        response = self.client.get(f"/api/requests/{other_request.pk}/")
+        response = self.client.get(reverse("request-detail", args=[other_request.pk]))
         # 404, not 403: the API does not reveal that the request exists.
         self.assertEqual(response.status_code, 404)
 
     def test_cannot_download_pending_request(self):
         access_request = self.make_request()
-        response = self.client.post(f"/api/requests/{access_request.pk}/download/")
+        response = self.client.post(self.download_url(access_request))
         self.assertEqual(response.status_code, 403)
         self.assertFalse(
             AuditLog.objects.filter(action=AuditLog.Action.DOWNLOADED).exists()
@@ -333,7 +336,7 @@ class ApiTests(CatalogueTestCase):
     def test_download_approved_request_writes_audit_entry(self):
         access_request = self.make_request()
         self.approve(access_request)
-        response = self.client.post(f"/api/requests/{access_request.pk}/download/")
+        response = self.client.post(self.download_url(access_request))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["checksum_sha256"], "a" * 64)
         self.assertTrue(
