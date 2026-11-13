@@ -21,7 +21,7 @@
 
 ## `catalogue/tests.py`
 
-**Summary:** The tests check the rules that make the library trustworthy. There are 15 tests in four groups. The constraint tests prove that the database itself rejects a duplicate version and an approval with no reviewer. The audit log tests prove that an entry cannot be changed or deleted, and that adding a package in the admin writes audit entries. The review action tests run the real admin approve and reject actions, and prove that a request cannot be reviewed twice. The API tests prove that login is required, users see only their own requests, a pending request cannot be downloaded, and every successful download is logged. CI runs all tests against PostgreSQL on every push.
+**Summary:** The tests check the rules that make the library trustworthy. There are 15 tests in four groups. The constraint tests prove that the database itself rejects a duplicate version and an approval with no reviewer. The audit log tests prove that an entry cannot be changed or deleted, and that adding a package in the admin writes audit entries. The review action tests run the real admin approve and reject actions, and prove that a request cannot be reviewed twice. The API tests prove that login is required, users see only their own requests, a pending request cannot be downloaded, and every successful download is logged. Continuous integration runs all tests against PostgreSQL on every push.
 
 **Key decisions:**
 
@@ -72,6 +72,17 @@
 - Secure by default: the app does not start without a secret key, and debug mode is off unless explicitly turned on.
 - All times are stored in UTC, so audit entries from different time zones stay in the correct order.
 
+## `Dockerfile` and `compose.yaml`
+
+**Summary:** Docker runs the app and PostgreSQL in containers, so the setup is the same on any computer. The Dockerfile builds the app image from a small Python 3.12 base, installs the dependencies, and runs the app as a normal user instead of root. `compose.yaml` starts two services: the database and the app. The app waits until the database passes a health check, applies migrations, and starts. Database data is kept in a named volume, so it survives when containers are recreated.
+
+**Key decisions:**
+
+- Dependencies are installed before the code is copied, so a code change does not reinstall every package.
+- The container runs as a non-root user, which limits the damage if the app is compromised.
+- The app waits for a database health check, not only for the database container to exist, so migrations never run before PostgreSQL is ready.
+- A `.dockerignore` keeps secrets, the local database, and the virtual environment out of the image.
+
 ## Known Limitations
 
 - **`catalogue/models.py`: bulk changes can bypass the audit log protection.** Django bulk operations, such as `AuditLog.objects.all().delete()` or `.update()`, skip the model methods. Raw SQL skips them too. The model methods stop accidental changes in the application.
@@ -91,6 +102,7 @@
 - **`catalogue/tests.py`: tests hard-code API paths.** The API tests use paths like `/api/packages/`, so a change to the URL structure breaks them.
 - **`config/urls.py`: the API has no version in its path.** A future change to the response format would affect every client at once.
 - **`config/settings.py`: production security settings are not configured.** HTTPS redirects, secure cookies, and HTTP Strict Transport Security are not set, and there is no folder for collected static files, so the admin's styling would not load in production.
+- **`Dockerfile` and `compose.yaml`: the setup is for development.** The app runs Django's development server, the project folder is mounted into the container, and migrations run every time the app starts.
 
 ## Next Steps
 
@@ -101,9 +113,10 @@
 - **`catalogue/tests.py`: `is_restricted` has tests, but they are skipped.** `RestrictedPackageTests` describes the rule: a reviewer without the `approve_restricted` permission cannot approve a restricted package, and a reviewer with it can. When the rule is added to `AccessRequestAdmin._review`, remove the `@skip` decorator.
 - **`catalogue/tests.py`: some rules have no test yet.** Add tests for the read-only audit log admin, non-staff access to admin actions, and downloads of another user's approved request.
 - **`catalogue/tests.py`: concurrent reviews are not tested.** Add a `TransactionTestCase` that runs two reviews in parallel threads against PostgreSQL.
-- **`catalogue/tests.py`: local test runs use SQLite.** Run the tests locally against PostgreSQL with `compose.yaml`, so local results match CI.
+- **`catalogue/tests.py`: local test runs use SQLite.** Run the tests against PostgreSQL with `docker compose exec web python manage.py test`, so local results match continuous integration.
 - **`catalogue/serializers.py`: the institution is self-declared.** Link each user to an institution (for example, a profile model), and have the server set the institution, as it does for the requester.
 - **`catalogue/serializers.py`: every logged-in user sees every package.** Confirm the policy. If needed, filter restricted packages in the view, or hide their details from users without approved access.
 - **`catalogue/tests.py`: tests hard-code API paths.** Build paths with `reverse()` and the router's route names, for example `reverse("package-list")`.
 - **`config/urls.py`: the API has no version in its path.** Serve the API under `/api/v1/`, so a future version can run alongside it.
-- **`config/settings.py`: production security settings are not configured.** Run `python manage.py check --deploy`, which lists every missing production setting, and add a production check to continuous integration. Set `STATIC_ROOT` and serve static files, for example with WhiteNoise.
+- **`config/settings.py`: production security settings are not configured.** Run `python manage.py check --deploy`, which lists missing security settings, and add a production check to continuous integration. Set `STATIC_ROOT` and serve static files, for example with WhiteNoise.
+- **`Dockerfile` and `compose.yaml`: the setup is for development.** For production, run a production web server such as gunicorn, remove the folder mount, and run migrations as a separate release step.

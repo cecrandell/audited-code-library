@@ -1,3 +1,6 @@
+# Local development environment: the Django app and PostgreSQL.
+# Values come from the .env file. Start with: docker compose up --build
+
 services:
   db:
     image: postgres:17
@@ -5,6 +8,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Named volume, so data survives when the container is recreated.
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -15,6 +19,7 @@ services:
 
   web:
     build: .
+    # Mount the project folder, so code changes reload without a rebuild.
     volumes:
       - .:/app
     command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
@@ -24,6 +29,7 @@ services:
       POSTGRES_HOST: db
     ports:
       - "8000:8000"
+    # Wait until PostgreSQL accepts connections before migrating.
     depends_on:
       db:
         condition: service_healthy
