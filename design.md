@@ -83,6 +83,17 @@
 - The app waits for a database health check, not only for the database container to exist, so migrations never run before PostgreSQL is ready.
 - A `.dockerignore` keeps secrets, the local database, and the virtual environment out of the image.
 
+## `.github/workflows/ci.yml` and `pyproject.toml`
+
+**Summary:** Continuous integration runs on every push to main and on every pull request. The test job starts a PostgreSQL service and runs four checks in order: lint with Ruff, the Django system check, a check for missing migrations, and the test suite. A second job builds the Docker image. `pyproject.toml` configures Ruff: Ruff's default rules, plus import sorting, with generated migration files excluded.
+
+**Key decisions:**
+
+- Tests run against PostgreSQL, the same database as production, not SQLite.
+- The fastest checks run first, so a simple mistake is reported in seconds and the slower steps are skipped.
+- The migration check fails if a model changes without a migration, so the database schema and the code cannot drift apart.
+- The workflow uses clearly fake, throwaway values for the secret key and database credentials. No real secret is stored in the repository.
+
 ## Known Limitations
 
 - **`catalogue/models.py`: bulk changes can bypass the audit log protection.** Django bulk operations, such as `AuditLog.objects.all().delete()` or `.update()`, skip the model methods. Raw SQL skips them too. The model methods stop accidental changes in the application.
@@ -103,6 +114,8 @@
 - **`config/urls.py`: the API has no version in its path.** A future change to the response format would affect every client at once.
 - **`config/settings.py`: production security settings are not configured.** HTTPS redirects, secure cookies, and HTTP Strict Transport Security are not set, and there is no folder for collected static files, so the admin's styling would not load in production.
 - **`Dockerfile` and `compose.yaml`: the setup is for development.** The app runs Django's development server, the project folder is mounted into the container, and migrations run every time the app starts.
+- **`.github/workflows/ci.yml`: the Docker job only builds the image.** It does not start the app or run the tests inside the container.
+- **`.github/workflows/ci.yml`: two actions use an outdated Node.js version.** `actions/checkout@v4` and `actions/setup-python@v5` show deprecation warnings on every run.
 
 ## Next Steps
 
@@ -120,3 +133,5 @@
 - **`config/urls.py`: the API has no version in its path.** Serve the API under `/api/v1/`, so a future version can run alongside it.
 - **`config/settings.py`: production security settings are not configured.** Run `python manage.py check --deploy`, which lists missing security settings, and add a production check to continuous integration. Set `STATIC_ROOT` and serve static files, for example with WhiteNoise.
 - **`Dockerfile` and `compose.yaml`: the setup is for development.** For production, run a production web server such as gunicorn, remove the folder mount, and run migrations as a separate release step.
+- **`.github/workflows/ci.yml`: the Docker job only builds the image.** Start the containers with `docker compose` in the workflow and run the tests inside them.
+- **`.github/workflows/ci.yml`: two actions use an outdated Node.js version.** Update to `actions/checkout@v5` and `actions/setup-python@v6`.

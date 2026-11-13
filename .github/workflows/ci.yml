@@ -1,3 +1,6 @@
+# Runs lint, Django checks, a migration check, and the tests against
+# PostgreSQL on every push to main and every pull request. A separate
+# job checks that the Docker image builds.
 name: CI
 
 on:
@@ -24,6 +27,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    # Throwaway values for a disposable test database.
     env:
       SECRET_KEY: ci-only-key-not-a-real-secret
       DEBUG: "False"
@@ -35,6 +39,7 @@ jobs:
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
 
+    # Fastest checks first, so failures are reported early.
     steps:
       - uses: actions/checkout@v4
 
