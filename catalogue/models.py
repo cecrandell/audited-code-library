@@ -88,7 +88,7 @@ class AccessRequest(models.Model):
     A request starts as pending. A reviewer then approves or rejects it.
     """
 
-    class Status(models.TextChoices):  # a nested class
+    class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
@@ -98,7 +98,7 @@ class AccessRequest(models.Model):
     requester = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="access_requests",  # user.access_requests.all()
+        related_name="access_requests",
     )
     institution = models.ForeignKey(
         Institution,
