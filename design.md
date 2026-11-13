@@ -115,7 +115,6 @@
 - **`config/settings.py`: production security settings are not configured.** HTTPS redirects, secure cookies, and HTTP Strict Transport Security are not set, and there is no folder for collected static files, so the admin's styling would not load in production.
 - **`Dockerfile` and `compose.yaml`: the setup is for development.** The app runs Django's development server, the project folder is mounted into the container, and migrations run every time the app starts.
 - **`.github/workflows/ci.yml`: the Docker job only builds the image.** It does not start the app or run the tests inside the container.
-- **`.github/workflows/ci.yml`: two actions use an outdated Node.js version.** `actions/checkout@v4` and `actions/setup-python@v5` show deprecation warnings on every run.
 
 ## Next Steps
 
@@ -134,4 +133,3 @@
 - **`config/settings.py`: production security settings are not configured.** Run `python manage.py check --deploy`, which lists missing security settings, and add a production check to continuous integration. Set `STATIC_ROOT` and serve static files, for example with WhiteNoise.
 - **`Dockerfile` and `compose.yaml`: the setup is for development.** For production, run a production web server such as gunicorn, remove the folder mount, and run migrations as a separate release step.
 - **`.github/workflows/ci.yml`: the Docker job only builds the image.** Start the containers with `docker compose` in the workflow and run the tests inside them.
-- **`.github/workflows/ci.yml`: two actions use an outdated Node.js version.** Update to `actions/checkout@v5` and `actions/setup-python@v6`.
