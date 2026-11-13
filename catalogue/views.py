@@ -39,8 +39,8 @@ class AccessRequestViewSet(
         )
 
     def perform_create(self, serializer):
-        # Django REST Framework does not wrap views in a transaction, so save the request
-        # and its audit entry together explicitly.
+        # Django REST Framework does not wrap views in a transaction, so
+        # save the request and its audit entry together explicitly.
         with transaction.atomic():
             access_request = serializer.save(requester=self.request.user)
             AuditLog.objects.create(

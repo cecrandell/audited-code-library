@@ -176,7 +176,7 @@ class ReviewActionTests(CatalogueTestCase):
         )
 
 
-@skip("is_restricted is not enforced yet. See README, Known limitations.")
+@skip("is_restricted is not enforced yet. See README, Known Issues.")
 class RestrictedPackageTests(CatalogueTestCase):
     """Only reviewers with a dedicated permission can approve restricted packages."""
 
