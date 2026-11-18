@@ -2,223 +2,189 @@
 
 ![CI](https://github.com/cecrandell/audited-code-library/actions/workflows/ci.yml/badge.svg?branch=main)
 
-**Who received which version of which simulation code, and who approved it?**
+A small Django app for distributing scientific software with a full audit trail. Staff add codes and versions, researchers request access, staff approve or reject, and approved users download. Every one of those steps is recorded in a log that can't be edited or deleted from the app.
 
-This app can always answer that question.
-
-Audited Code Library is a demo of a secure, accountable workflow for the acquisition, review, and distribution of scientific software. Researchers request access to a code for their institution. Staff review each request. Every step goes into an append-only audit log that cannot be edited or deleted through the app.
-
-## Why this exists
-
-International scientific data centres share specialised software, such as simulation codes and benchmark data, with universities, research labs, and industry across many countries. Some codes carry licence terms or export controls. These centres need a clear record of every request, every decision, and every distribution, and they need to trust that record for years.
-
-This project shows how I would build the core of that system: Python, Django, PostgreSQL, a REST API, containers, and CI.
-
-## The workflow
+The idea came from thinking about research groups that share simulation codes with other institutions. They need to know who has which version and who signed off on it, sometimes years later. This project is my attempt at a small version of that.
 
 ```mermaid
 flowchart LR
-    A["Acquire<br/>package + version + checksum"] --> B["Request<br/>institution asks for access"]
+    A["Acquire<br/>package + version + checksum"] --> B["Request<br/>user asks for access"]
     B --> C{"Review<br/>staff approve or reject"}
-    C -->|Approved| D["Distribute<br/>audited download"]
-    C -->|Rejected| E["Closed<br/>decision is final"]
-    A -.-> L[("Audit log<br/>append-only")]
+    C -->|Approved| D["Distribute<br/>logged download"]
+    C -->|Rejected| E["Closed"]
+    A -.-> L[("Audit log")]
     B -.-> L
     C -.-> L
     D -.-> L
 ```
 
-Every arrow to the audit log happens in the same database transaction as the action itself. If the log entry cannot be written, the action does not happen.
+**Stack:** Python 3.12, Django 5.2 LTS, Django REST Framework, PostgreSQL 17, Docker, Ruff, GitHub Actions.
 
-## Features
+## Getting Started
 
-- [x] **Acquire:** catalogue of code packages and versions, each with a SHA-256 checksum
-- [x] **Request:** institutions request a specific version, with a stated purpose
-- [x] **Review:** staff approve or reject in the admin, and each decision is final
-- [x] **Distribute:** approved users download through the API, and each download is logged
-- [x] **Audit:** append-only log of every action, protected in the app and the admin
-- [x] REST API for packages and requests (Django REST Framework)
-- [x] 15 automated tests, run against PostgreSQL in CI
-- [x] Docker setup with PostgreSQL
-- [x] CI pipeline with GitHub Actions
-
-## Tech stack
-
-| Area      | Tools                                       |
-| --------- | ------------------------------------------- |
-| Language  | Python 3.12                                 |
-| Framework | Django 5.2 LTS, Django REST Framework       |
-| Database  | PostgreSQL 17 (SQLite for quick local work) |
-| Platform  | Linux containers (Docker, Docker Compose)   |
-| Quality   | Ruff, Django test framework                 |
-| CI        | GitHub Actions                              |
-
-## Quick start with Docker
-
-You only need [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-
-**1. Clone the repo**
+The easiest way to run it is with [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 ```bash
-git clone git@github.com:cecrandell/audited-code-library.git
+git clone https://github.com/cecrandell/audited-code-library.git
 cd audited-code-library
-```
-
-**2. Create your `.env` file**
-
-```bash
 cp .env.example .env
 ```
 
-Make a secret key and paste it into `.env` as `SECRET_KEY`:
+Open `.env` and set `SECRET_KEY`. You can generate one with:
 
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
-Choose any value for `POSTGRES_PASSWORD`. It only lives on your computer.
+Set `POSTGRES_PASSWORD` to anything you like. It's only used by the local database container.
 
-**3. Start the app**
+Then start everything:
 
 ```bash
 docker compose up --build
 ```
 
-**4. Create an admin user** (in a second terminal)
+In a second terminal, create an admin account:
 
 ```bash
 docker compose exec web python manage.py createsuperuser
 ```
 
-**5. Open it**
+The admin is at http://localhost:8000/admin and the API is at http://localhost:8000/api. The terminal will say the server is running on `0.0.0.0:8000`, but use `localhost` in your browser.
 
-- Admin: http://localhost:8000/admin
-- API: http://localhost:8000/api
+### Without Docker
 
-Tip: the terminal shows `http://0.0.0.0:8000`. That is where the server listens, so your browser cannot open it. Use `localhost`.
-
-## A five-minute tour
-
-1. **Acquire.** In the admin, add an institution (for example, "Université Paris-Saclay", country `FR`). Then add a code package with one version. For a real checksum, run `shasum -a 256 README.md`.
-2. **Request.** Log in at http://localhost:8000/api-auth/login/, open `/api/requests/`, and create a request.
-3. **Review.** In the admin, tick the request and choose **Approve selected pending requests**.
-4. **Distribute.** In the API, open your request, go to `download/`, and click **POST**.
-5. **Audit.** Open **Audit logs** in the admin and read the full history of that code, step by step.
-
-Now try to edit or delete an audit entry. You can't. That is the point. 🔒
-
-## Run without Docker
+This uses SQLite instead of PostgreSQL, which is fine for trying things out:
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # then add your SECRET_KEY
+cp .env.example .env    # add your SECRET_KEY
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
 ```
 
-<details>
-<summary><strong>New to GitHub? Set up an SSH key first</strong></summary>
+## Trying It Out
 
-An SSH key lets your computer talk to GitHub securely. You only do this once per computer.
+Here's a quick walk through the whole workflow:
 
-Use the email on your GitHub account, or your private address from **Settings > Emails** (it ends in `@users.noreply.github.com`):
+1. In the admin, add an institution (any name, with a two-letter country code such as `FR` or `GB`). Then add a code package with one version. If you want a real checksum, `shasum -a 256 README.md` gives you one.
+2. Log in to the API at http://localhost:8000/api-auth/login/, go to `/api/requests/`, and create a request for that version.
+3. Back in the admin, open Access requests, tick your request, and choose "Approve selected pending requests" from the actions menu.
+4. In the API, go to `/api/requests/<id>/download/` and click POST. You'll get the package name, version, and checksum back.
+5. Open Audit logs in the admin. Every step you just took is there.
 
-```bash
-ssh-keygen -t ed25519 -C "you@example.com"
-eval "$(ssh-agent -s)"
-ssh-add --apple-use-keychain ~/.ssh/id_ed25519
-pbcopy < ~/.ssh/id_ed25519.pub
+If you try to edit or delete one of those log entries, you'll find you can't.
+
+## Project Layout
+
+```
+catalogue/
+    models.py         # institutions, packages, versions, requests, audit log
+    admin.py          # staff interface and the approve/reject actions
+    serializers.py    # what the API shows and accepts
+    views.py          # API endpoints, including download
+    urls.py           # API routes
+    tests.py
+config/
+    settings.py       # all secrets and environment settings come from env vars
+    urls.py           # top-level routes: /admin, /api, /api-auth
+Dockerfile
+compose.yaml          # app + PostgreSQL for local development
+.github/workflows/ci.yml
 ```
 
-On GitHub, go to **Settings > SSH and GPG keys > New SSH key**, paste, and save. Then test it:
+## API
+
+Every endpoint needs you to be logged in. Lists are paginated, 50 items per page.
+
+| Method | Endpoint                       | What it does                                                        |
+| ------ | ------------------------------ | ------------------------------------------------------------------- |
+| GET    | `/api/packages/`               | List packages with their versions and checksums                     |
+| GET    | `/api/requests/`               | List your own requests                                              |
+| POST   | `/api/requests/`               | Create a request (send `institution`, `package_version`, `purpose`) |
+| GET    | `/api/requests/<id>/`          | View one of your requests                                           |
+| POST   | `/api/requests/<id>/download/` | Download an approved package (logged)                               |
+
+Download currently returns the package details and checksum rather than a file. See the known issues below.
+
+## How It Works
+
+Most of the work in this project went into making the history trustworthy.
+
+### Database Rules
+
+- A request can't be marked approved or rejected unless it also records who reviewed it and when. This is a check constraint in PostgreSQL, so it holds even if the Python code has a bug.
+- While testing, before the status field was read-only, I set a request to approved directly in the admin. PostgreSQL rejected the save because no reviewer was recorded.
+- A package can't have two versions with the same number.
+- All foreign keys use `PROTECT`, so nothing with history can be deleted. Staff who leave are deactivated instead, and their name stays on everything they did.
+
+### Audit Log
+
+- Every action and its audit entry are saved in the same transaction. If the log entry fails, the action is rolled back.
+- The audit log model refuses edits and deletes.
+- The admin page for the audit log is read-only, even for superusers.
+
+### Reviews
+
+- A request's status only changes through the approve and reject actions. It's read-only on the edit page.
+- Those actions lock the selected rows with `select_for_update()`. If two reviewers click at the same moment, the second one finds the request is no longer pending and skips it.
+
+### API Access
+
+- Users only see their own requests. Asking for someone else's returns 404, not 403, so you can't use the API to discover which requests exist.
+- The server sets the requester from whoever is logged in, so you can't make a request on someone else's behalf.
+- Requests can't be edited or deleted through the API.
+- Download uses POST, so only a deliberate action can create a download record in the audit log.
+
+### Settings
+
+- The app won't start without a `SECRET_KEY`.
+- Debug mode is off unless you explicitly turn it on.
+- The Docker container runs as a non-root user.
+
+## Running the Tests
 
 ```bash
-ssh -T git@github.com
+docker compose exec web python manage.py test    # against PostgreSQL
+python manage.py test                            # against SQLite
 ```
 
-If GitHub greets you by name, you are in. Never share the private key (the file without `.pub`).
+There are 15 tests, plus 2 skipped tests I've written ahead of a feature that isn't built yet (see below). Most of them go through the real admin pages and API rather than calling model methods directly, and a lot of them check that something is refused: duplicate versions, approvals without a reviewer, editing the audit log, reviewing the same request twice, seeing another user's request, and downloading before approval.
 
-</details>
+GitHub Actions runs on every push to `main` and every pull request. It runs Ruff, Django's system check, a check for missing migrations, and the full test suite against a real PostgreSQL 17 database, and it builds the Docker image in a separate job.
 
-## Data model
+## Known Issues
 
-| Model            | What it stores                                                |
-| ---------------- | ------------------------------------------------------------- |
-| `Institution`    | The organisation that requests a code, with its country       |
-| `CodePackage`    | A simulation code or tool. Restricted codes need extra review |
-| `PackageVersion` | One release of a code, with its SHA-256 checksum              |
-| `AccessRequest`  | One user asks for one version, with a stated purpose          |
-| `AuditLog`       | A permanent, append-only record of every action               |
+This is a demonstration, so there are gaps. These are the ones I know about and what I'd do next:
 
-**About checksums:** SHA-256 turns any file into a 64-character fingerprint. Change one byte, and the fingerprint changes completely. A matching checksum proves that a code arrived exactly as it was released.
+- The audit log is protected at the application level, but Django's bulk operations (`.update()` and `.delete()` on a queryset) and raw SQL can still get round it. In production, I'd give the app a database role that can only insert into the audit table.
+- Editing a package or version in the admin isn't logged, only creating one is. Request details can also still be edited after a decision. Both should be fixed: log the changes, and make decided requests fully read-only.
+- Packages have an `is_restricted` flag, but nothing enforces it yet. The plan is a separate permission for reviewers who can approve restricted codes. The tests for this are already in `tests.py`, marked as skipped.
+- Users pick their own institution when they make a request, and nothing checks they belong to it. Users should be linked to an institution, and the server should set it.
+- Every logged-in user can see every package, including restricted ones. Whether that's acceptable depends on the policy for those codes.
+- Download returns metadata, not a file, and approvals never expire. Real file storage, with checksums calculated on upload, and an expiry date would be next.
+- The row locking during reviews isn't covered by a test. Testing it properly needs two database connections running at once against PostgreSQL, which I haven't set up yet.
+- The API isn't versioned. I'd move it to `/api/v1/` before any outside client relied on it. The tests use route names, so they wouldn't need to change.
+- The Docker setup is for development. It uses Django's built-in server and mounts the project folder. For production, I'd use gunicorn behind a reverse proxy, configure HTTPS and static files, and run migrations as a separate release step.
 
-## Design decisions
+## Ideas for Later
 
-**Accountability lives in the database.** A check constraint refuses any reviewed request without a reviewer and a review time. A unique constraint stops duplicate version numbers. These rules hold even if application code has a bug. During development, a manual status change in the admin skipped the app's checks, and the database blocked it. The safety net worked.
+Things that are out of scope for now but would make this closer to a real service:
 
-**History cannot disappear.** Foreign keys use `PROTECT`, so you cannot delete a user, code, or request that has history.
-
-**The audit log is append-only.** The app blocks edits and deletes, and the admin hides those options for everyone. One honest limit: Django bulk queries can skip model methods. In production, database permissions should also remove UPDATE and DELETE rights on the audit table.
-
-**Each decision and its record are one unit.** Approve and Reject run inside `transaction.atomic()`, so the status change and the audit entry save together or not at all. `select_for_update()` locks the rows, so two staff members cannot review the same request at once.
-
-**The API is secure by default.** Every endpoint needs a login. Users see only their own requests, and requests from other users return 404, so the API does not reveal which records exist. Download is a POST, because it writes to the audit log.
-
-**Queries stay efficient.** `select_related` and `prefetch_related` keep each API page to a few queries, however many codes the catalogue holds.
-
-## Continuous integration
-
-GitHub Actions runs on every push and pull request:
-
-1. Lints the code with Ruff.
-2. Runs Django's system check.
-3. Fails if a model change has no migration.
-4. Runs the test suite against PostgreSQL 17.
-5. Builds the Docker image.
-
-## Next steps
-
-This demo covers the core workflow. In production, I would add:
-
-- **Distribution reports** by code, country, and month.
-- **Real file storage**, with checksums verified on upload.
-- **Parity tests before any legacy migration**, so business logic stays the same.
-
-## REST API
-
-All endpoints need a login.
-
-| Method | Endpoint                       | Description                           |
-| ------ | ------------------------------ | ------------------------------------- |
-| GET    | `/api/packages/`               | List packages and versions            |
-| GET    | `/api/requests/`               | List your own access requests         |
-| POST   | `/api/requests/`               | Create an access request              |
-| GET    | `/api/requests/<id>/`          | View one of your requests             |
-| POST   | `/api/requests/<id>/download/` | Download an approved package (logged) |
-
-For now, download returns the code details and checksum.
-
-## Tests
-
-```bash
-docker compose exec web python manage.py test    # PostgreSQL
-python manage.py test                            # SQLite
-```
-
-The 15 tests check that:
-
-- A code cannot have two versions with the same number.
-- The database blocks a reviewed request with no reviewer.
-- Audit entries cannot be changed or deleted.
-- Adding a code or version in the admin writes audit entries.
-- Approve and Reject set the reviewer and write exactly one audit entry.
-- A request cannot be reviewed twice.
-- The API requires a login, and users see only their own requests.
-- Pending requests cannot be downloaded, and approved downloads are logged.
+- A FastAPI service alongside Django, reading the same PostgreSQL database, with automatic API documentation.
+- Monthly distribution reports by package and country.
+- Distributing benchmark data sets as well as codes.
+- Automatically testing submitted codes in isolated containers, with the results recorded in the audit log.
+- Parity tests for migrating legacy code to a new language, to show the business logic hasn't changed.
+- Running the app on Kubernetes.
+- A full deployment pipeline: tests and a container build on every pull request, then a staging environment, then production with a quick way to roll back.
+- Scheduled database backups with a tested restore, plus monitoring and alerts.
+- Single sign-on.
+- A search assistant for public code documentation, using retrieval-augmented generation. Restricted material would never be sent to an external AI service.
 
 ## Developer
 
-Built by Caroline Crandell ([@cecrandell](https://github.com/cecrandell)).
+Caroline Crandell ([@cecrandell](https://github.com/cecrandell))
